@@ -98,7 +98,8 @@ class EWiseDiv(TensorOp):
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        lhs, rhs = node.inputs
+        return out_grad / rhs, -(out_grad * lhs) / (rhs * rhs)
         ### END YOUR SOLUTION
 
 
@@ -117,7 +118,7 @@ class DivScalar(TensorOp):
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return out_grad / self.scalar
         ### END YOUR SOLUTION
 
 
@@ -139,7 +140,7 @@ class Transpose(TensorOp):
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return transpose(out_grad, self.axes)
         ### END YOUR SOLUTION
 
 
@@ -158,7 +159,8 @@ class Reshape(TensorOp):
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        # 不是self.shape，因为要和输入的shape一致，self.shape!=输入的shape
+        return reshape(out_grad, node.inputs[0].shape)
         ### END YOUR SOLUTION
 
 
@@ -175,7 +177,31 @@ class BroadcastTo(TensorOp):
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        input_shape = node.inputs[0].shape
+        input_shape_len = len(input_shape) - 1
+        self.reduce_dim = []
+        # broadcast后的shape从右往左遍历
+        for idx in range(len(out_grad.shape)-1, -1, -1): 
+            """
+            如果当前没有input_shape了
+                 |  
+            A:     3 3
+            B: 4 4 3 3
+            则把当前dim也添加到reduce_dim中
+            """
+            if input_shape_len < 0: 
+                self.reduce_dim.append(idx)
+                continue
+            # 否则取broadcast后的dim，和input的dim            
+            broadcast_dim_size = self.shape[idx]
+            input_dim_size = input_shape[input_shape_len]
+            
+            # 比较是否相等，如果不等，说明发生了broadcast，需要将当前dim添加到reduce_dim
+            if broadcast_dim_size != input_dim_size: 
+                self.reduce_dim.append(idx)
+            input_shape_len -= 1
+        # 做reduce_sum，并且保证与原始输入shape一致
+        return reshape(summation(out_grad, tuple(self.reduce_dim)), input_shape)
         ### END YOUR SOLUTION
 
 
@@ -194,7 +220,21 @@ class Summation(TensorOp):
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        input_shape = node.inputs[0].shape
+        broadcast_shape = list(input_shape)
+        if self.axes: 
+            # 对reduce的维度，设置shape为1
+            for i in self.axes: 
+                broadcast_shape[i] = 1
+        # 如果没指定axes，那么就是对所有维度reduce了，如sum(tensor((4, 4))) -> 1
+        # 我们构造出broadast_shape为(1, 1)
+        else: 
+            broadcast_shape = [1 for _ in range(len(broadcast_shape))] # (1, 1, 1, 1)
+        # 对out_grad reshape一下
+        out_grad = reshape(out_grad, broadcast_shape)
+        # 借助numpy的广播机制
+        return out_grad * array_api.ones(input_shape, dtype=array_api.float32)
+
         ### END YOUR SOLUTION
 
 
@@ -210,7 +250,16 @@ class MatMul(TensorOp):
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        lhs, rhs = node.inputs
+        lhs_tmp_grad = matmul(out_grad, transpose(rhs))
+        rhs_tmp_grad = matmul(transpose(lhs), out_grad)
+        if lhs_tmp_grad.shape != lhs.shape: 
+            # Need Reduce
+            lhs_tmp_grad = summation(lhs_tmp_grad, axes=tuple(range(len(lhs_tmp_grad.shape) - 2)))
+        if rhs_tmp_grad.shape != rhs.shape: 
+            # Need Reduce
+            rhs_tmp_grad = summation(rhs_tmp_grad, axes=tuple(range(len(rhs_tmp_grad.shape) - 2)))
+        return lhs_tmp_grad, rhs_tmp_grad
         ### END YOUR SOLUTION
 
 
@@ -226,7 +275,7 @@ class Negate(TensorOp):
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return -out_grad 
         ### END YOUR SOLUTION
 
 
