@@ -220,20 +220,39 @@ class Summation(TensorOp):
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        input_shape = node.inputs[0].shape
-        broadcast_shape = list(input_shape)
-        if self.axes: 
-            # 对reduce的维度，设置shape为1
-            for i in self.axes: 
-                broadcast_shape[i] = 1
-        # 如果没指定axes，那么就是对所有维度reduce了，如sum(tensor((4, 4))) -> 1
-        # 我们构造出broadast_shape为(1, 1)
-        else: 
-            broadcast_shape = [1 for _ in range(len(broadcast_shape))] # (1, 1, 1, 1)
-        # 对out_grad reshape一下
-        out_grad = reshape(out_grad, broadcast_shape)
-        # 借助numpy的广播机制
-        return out_grad * array_api.ones(input_shape, dtype=array_api.float32)
+        #input_shape = node.inputs[0].shape
+        #broadcast_shape = list(input_shape)
+        #if self.axes: 
+        #    # 对reduce的维度，设置shape为1
+        #    for i in self.axes: 
+        #        broadcast_shape[i] = 1
+        ## 如果没指定axes，那么就是对所有维度reduce了，如sum(tensor((4, 4))) -> 1
+        ## 我们构造出broadast_shape为(1, 1)
+        #else: 
+        #    broadcast_shape = [1 for _ in range(len(broadcast_shape))] # (1, 1, 1, 1)
+        ## 对out_grad reshape一下
+        #out_grad = reshape(out_grad, broadcast_shape)
+        ## 借助numpy的广播机制
+        #return out_grad * array_api.ones(input_shape, dtype=array_api.float32)
+
+        ipt = node.inputs[0]
+        if self.axes:
+            grad = array_api.expand_dims(out_grad.cached_data, self.axes)
+            if isinstance(self.axes, int):
+                repeat = ipt.shape[self.axes]
+                grad = array_api.repeat(grad, repeat, self.axes)
+            else:
+                repeat = []
+                for i in self.axes:
+                    repeat.append(ipt.shape[i])
+                for r, a in zip(repeat, self.axes):
+                    grad = array_api.repeat(grad, r, a)
+        else:
+            grad = array_api.ones_like(ipt.cached_data) * out_grad.cached_data
+
+        grad = Tensor(grad)
+
+        return [grad]
 
         ### END YOUR SOLUTION
 
@@ -286,12 +305,12 @@ def negate(a):
 class Log(TensorOp):
     def compute(self, a):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return array_api.log(a)
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return out_grad / node.inputs[0]
         ### END YOUR SOLUTION
 
 
@@ -302,12 +321,12 @@ def log(a):
 class Exp(TensorOp):
     def compute(self, a):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return array_api.exp(a)
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return out_grad * exp(node.inputs[0])
         ### END YOUR SOLUTION
 
 
@@ -319,12 +338,17 @@ def exp(a):
 class ReLU(TensorOp):
     def compute(self, a):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        # relu_mask是numpy
+        relu_mask = a > 0 
+        return a * relu_mask
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        #relu_mask = Tensor((node.inputs[0].cached_data > 0).astype(array_api.float32))
+        relu_mask = Tensor((node.inputs[0].cached_data > 0))
+        # tensor float64 numpy float64
+        return out_grad * relu_mask
         ### END YOUR SOLUTION
 
 

@@ -5,9 +5,10 @@ import numpy as np
 import sys
 sys.path.append('python/')
 import needle as ndl
+from needle.ops import exp, log, relu, matmul
+from needle.autograd import Tensor 
 
-
-def parse_mnist(image_filesname, label_filename):
+def parse_mnist(image_filename, label_filename):
     """ Read an images and labels file in MNIST format.  See this page:
     http://yann.lecun.com/exdb/mnist/ for a description of the file format.
 
@@ -30,9 +31,18 @@ def parse_mnist(image_filesname, label_filename):
                 for MNIST will contain the values 0-9.
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    with gzip.open(image_filename, "rb") as f:
+        image = f.read()
+        X = np.frombuffer(image, dtype=np.uint8, offset=16).astype(np.float32)
+        X = X / 255
+        X = np.reshape(X, (-1, 784))
 
+    with gzip.open(label_filename, "rb") as f:
+        label = f.read()
+        y = np.frombuffer(label, dtype=np.uint8, offset=8)
+    return (X, y)
+
+    ### END YOUR SOLUTION
 
 def softmax_loss(Z, y_one_hot):
     """ Return softmax loss.  Note that for the purposes of this assignment,
@@ -51,7 +61,14 @@ def softmax_loss(Z, y_one_hot):
         Average softmax loss over the sample. (ndl.Tensor[np.float32])
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    m = Z.shape[0]
+    # sum不指定维度就是所有的数都加起来
+    z1 = log(exp(Z).sum(1)).sum()
+    z2 = (Z * y_one_hot).sum()
+    return (z1 - z2) / m
+    #Z1 = log(np.sum(np.exp(Z), axis=1))
+    #Z2 = Z(np.arange(y.shape[0]), y)
+    #return np.mean(Z1 - Z2)
     ### END YOUR SOLUTION
 
 
@@ -80,7 +97,23 @@ def nn_epoch(X, y, W1, W2, lr = 0.1, batch=100):
     """
 
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    n = X.shape[0]
+    n_class = max(y) + 1
+    for idx, bat in enumerate(range(0, n, batch)):
+        bat_x = X[bat:bat + batch, :]
+        bat_y = y[bat:bat + batch]
+
+        img = Tensor(bat_x)
+        label = np.zeros((batch, n_class))
+        label[range(batch), bat_y] = 1
+        label = Tensor(label)
+        z = ndl.matmul(ndl.relu(ndl.matmul(img, W1)), W2)
+        loss = softmax_loss(z, label)
+        loss.backward()
+        new_W1 = Tensor(W1.numpy() - lr * W1.grad.numpy())
+        new_W2 = Tensor(W2.numpy() - lr * W2.grad.numpy())
+        W1, W2 = new_W1, new_W2
+    return (W1, W2)
     ### END YOUR SOLUTION
 
 
